@@ -248,6 +248,7 @@ void Camera::startAcq()
 {
 	DEB_MEMBER_FUNCT();
 	DEB_TRACE() << "********** Inside of Camera::startAcq ***********";
+	AutoMutex aLock(m_cond.mutex());
 
 	waitAcqEnd();
 
@@ -342,6 +343,7 @@ void Camera::getStatus(XpadStatus& status)
 {
 	DEB_MEMBER_FUNCT();
 	DEB_TRACE() << "********** Inside of Camera::getStatus ***********";
+	AutoMutex aLock(m_cond.mutex());
 	CHECK_DETECTOR_ACCESS
 	stringstream cmd;
 	string str;
@@ -411,7 +413,7 @@ void Camera::AcqThread::threadFunction()
 		DEB_TRACE() << "Acqisition thread running...";
 		m_cam.m_thread_running = true;
 		m_cam.m_cond.broadcast();
-		aLock.unlock();
+		//aLock.unlock();
 
 		switch (m_cam.m_process_id)
 		{
