@@ -348,7 +348,8 @@ void Camera::getStatus(XpadStatus& status)
 	unsigned short pos;
 	cmd << "GetDetectorStatus";
 
-	m_xpad_alt->sendWait(cmd.str(), str);
+	//m_xpad_alt->sendWait(cmd.str(), str);
+	m_xpad_alt->sendCustomWait(cmd.str(), str);
 	pos = str.find(".");
 	string state = str.substr (0, pos);
 	if (state == "Idle")
@@ -376,6 +377,7 @@ void Camera::getStatus(XpadStatus& status)
 		status.state = XpadStatus::Resetting;
 	}
 	m_state.state = status.state;
+	std::cout << "Result status : " << state << std::endl;
 	DEB_TRACE() << "XpadStatus.state is [" << status.state << "]";
 
 	DEB_TRACE() << "********** Outside of Camera::getStatus ***********";

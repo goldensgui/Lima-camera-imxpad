@@ -138,6 +138,33 @@ void XpadClient::sendWait(string cmd, string& value) {
     }
 }
 
+void XpadClient::sendCustomWait(const string& cmd, string& value)
+{
+    DEB_MEMBER_FUNCT();
+    DEB_TRACE() << "sendCustomWait(" << cmd << ")";
+
+    if( send(m_skt , cmd.c_str() , strlen(cmd.c_str()) , 0) < 0)
+    {
+        THROW_HW_ERROR(Error) << "Send command to server failed.";
+    }
+
+    if( recv(m_skt , m_rd_buff , RD_BUFF , 0) < 0)
+    {
+       THROW_HW_ERROR(Error) << "Receive from server failed.";
+    }
+
+    value = m_rd_buff;
+    value.erase(0,3);
+    // int pos = test.find(".");
+    // test = test.substr (0, pos);
+    // std::cout << "Result test : " << test << std::endl;
+    //value = m_rd_buff;
+    // if (waitForResponse(value) < 0) 
+    // {
+    //     THROW_HW_ERROR(Error) << "Waiting for response from server";
+    // }
+    //waitForResponse(value);
+}
 
 void XpadClient::sendNoWait(string cmd) {
     DEB_MEMBER_FUNCT();
