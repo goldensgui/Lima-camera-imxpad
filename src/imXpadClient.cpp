@@ -50,6 +50,7 @@
 #include "lima/ThreadUtils.h"
 #include "lima/Exceptions.h"
 #include "lima/Debug.h"
+#include <algorithm>
 
 //static char errorMessage[1024];
 
@@ -154,16 +155,11 @@ void XpadClient::sendCustomWait(const string& cmd, string& value)
     }
 
     value = m_rd_buff;
-    value.erase(0,3);
-    // int pos = test.find(".");
-    // test = test.substr (0, pos);
-    // std::cout << "Result test : " << test << std::endl;
-    //value = m_rd_buff;
-    // if (waitForResponse(value) < 0) 
-    // {
-    //     THROW_HW_ERROR(Error) << "Waiting for response from server";
-    // }
-    //waitForResponse(value);
+    std::string special_chars("\"*> ");
+    for(int i = 0; i < special_chars.length(); ++i)
+    {
+        value.erase(std::remove(value.begin(), value.end(), special_chars[i]), value.end());
+    }
 }
 
 void XpadClient::sendNoWait(string cmd) {
