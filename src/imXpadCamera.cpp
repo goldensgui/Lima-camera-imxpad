@@ -348,7 +348,6 @@ void Camera::getStatus(XpadStatus& status)
 	unsigned short pos;
 	cmd << "GetDetectorStatus";
 
-	//m_xpad_alt->sendWait(cmd.str(), str);
 	m_xpad_alt->sendCustomWait(cmd.str(), str);
 	pos = str.find(".");
 	string state = str.substr (0, pos);
