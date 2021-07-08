@@ -139,7 +139,7 @@ void XpadClient::sendWait(string cmd, string& value) {
     }
 }
 
-void XpadClient::sendCustomWait(const string& cmd, string& value)
+void XpadClient::sendWaitCustom(const string& cmd, string& value)
 {
     DEB_MEMBER_FUNCT();
     DEB_TRACE() << "sendCustomWait(" << cmd << ")";
