@@ -294,7 +294,17 @@ void Camera::stopAcq()
 	DEB_MEMBER_FUNCT();
 	DEB_TRACE() << "********** Inside of Camera::stopAcq ***********";
 
-	//waitAcqEnd();
+	AutoMutex aLock(m_cond.mutex());
+	if(m_state.state != XpadStatus::Idle)
+	{
+		while( m_thread_running)
+		{
+			m_wait_flag = true;
+			m_cond.broadcast();
+			m_cond.wait();
+		}
+		aLock.unlock();
+	}
 
 	DEB_TRACE() << "********** Outside of Camera::stopAcq ***********";
 }
@@ -404,10 +414,13 @@ void Camera::AcqThread::threadFunction()
 			DEB_TRACE() << "quit flag value = " << m_cam.m_quit;
 			m_cam.m_thread_running = false;
 			m_cam.m_cond.broadcast();
-			aLock.unlock();
+			//aLock.unlock();
 			m_cam.m_cond.wait();
 		}
 
+		if(m_cam.m_quit)
+			return;
+		
 		DEB_TRACE() << "Acqisition thread running...";
 		m_cam.m_thread_running = true;
 		m_cam.m_cond.broadcast();
@@ -431,7 +444,14 @@ void Camera::AcqThread::threadFunction()
 					{
 						while (continueFlag && (!m_cam.m_nb_frames || m_cam.m_acq_frame_nb < m_cam.m_nb_frames))
 						{
-
+							
+							// Check first if acq. has been stopped
+							if(m_cam.m_wait_flag)
+							{
+								DEB_TRACE() << "AcqThread has been stopped from user";
+								continueFlag = false;
+								continue;
+							}
 							DEB_TRACE() << m_cam.m_acq_frame_nb;
 							void *bptr = buffer_mgr.getFrameBufferPtr(m_cam.m_acq_frame_nb);
 
@@ -447,6 +467,15 @@ void Camera::AcqThread::threadFunction()
 								++m_cam.m_acq_frame_nb;
 
 								DEB_TRACE() << "acquired " << m_cam.m_acq_frame_nb << " frames, required " << m_cam.m_nb_frames << " frames";
+							}
+							
+							else if(!m_cam.m_wait_flag)
+							{
+								aLock.lock();
+								DEB_TRACE() << "stopAcq only if this is not already done";
+								DEB_TRACE() << "stopAcq";
+								m_cam.stopAcq();
+								aLock.unlock();
 							}
 							else
 							{
@@ -520,7 +549,7 @@ void Camera::AcqThread::threadFunction()
 								HwFrameInfoType frame_info;
 								frame_info.acq_frame_nb = m_cam.m_acq_frame_nb;
 								continueFlag = buffer_mgr.newFrameReady(frame_info);
-								//DEB_TRACE() << "acqThread::threadFunction() newframe ready ";
+								DEB_TRACE() << "acqThread::threadFunction() newframe ready ";
 								++m_cam.m_acq_frame_nb;
 
 								DEB_TRACE() << "acquired " << m_cam.m_acq_frame_nb << " frames, required " << m_cam.m_nb_frames << " frames";
@@ -744,6 +773,7 @@ void Camera::AcqThread::threadFunction()
 				break;
 			}
 		}
+		m_cam.stopAcq();
 		aLock.lock();
 		m_cam.m_quit = false;
 		m_cam.m_wait_flag = true;
