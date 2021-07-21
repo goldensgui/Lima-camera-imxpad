@@ -400,6 +400,7 @@ private:
     bool                    m_quit;
     bool                    m_wait_flag;
     bool                    m_thread_running;
+    bool                    m_stop;
 
     class                   AcqThread;
     AcqThread               *m_acq_thread;

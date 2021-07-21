@@ -153,6 +153,13 @@ void XpadClient::sendWaitCustom(const string& cmd, string& value)
     {
        THROW_HW_ERROR(Error) << "Receive from server failed.";
     }
+    struct timeval tv;
+    tv.tv_sec = 3; //2 seconds : TOD, if it works, replace magiv value by true constant or new property for example
+    tv.tv_usec = 0;
+    if (setsockopt(m_skt,  SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv)) 
+    {
+        m_errorMessage = "Cannot Set socket options for timeout";
+    }
 
     value = m_rd_buff;
     std::string special_chars("\"*> ");
@@ -161,6 +168,7 @@ void XpadClient::sendWaitCustom(const string& cmd, string& value)
         value.erase(std::remove(value.begin(), value.end(), special_chars[i]), value.end());
     }
 }
+
 
 void XpadClient::sendNoWait(string cmd) {
     DEB_MEMBER_FUNCT();
@@ -296,7 +304,8 @@ int XpadClient::getDataExpose(void *bptr, unsigned short xpadFormat) {
 	ssize_t bytes = 0;
 	DEB_TRACE() << "read header from server [BEGIN]";
     unsigned char data_chain[3*sizeof(int32_t)];
-	while(bytes_received < 3*sizeof(uint32_t)){
+	
+    while(bytes_received < 3*sizeof(uint32_t)){
 		bytes = read(m_skt, data_chain + bytes_received, 3*sizeof(uint32_t) - bytes_received);
 		DEB_TRACE() << "bytes = " << bytes;
 		if(bytes < 0){
@@ -414,6 +423,16 @@ int XpadClient::connectToServer(const string hostName, int port) {
             m_errorMessage = "Cannot Set socket options";
             rc = -1;
         }
+
+        //Set a timeout
+        struct timeval tv;
+        tv.tv_sec = 3; //2 seconds : TOD, if it works, replace magiv value by true constant or new property for example
+        tv.tv_usec = 0;
+        if (setsockopt(m_skt,  SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv)) {
+            m_errorMessage = "Cannot Set socket options for timeout";
+            rc = -1;
+        }
+        
     }
     endprotoent();
     m_valid = 1;

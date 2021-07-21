@@ -38,6 +38,9 @@
 #include <ostream>
 #include <fstream>
 
+#include <thread>         
+#include <mutex>
+
 
 using namespace std;
 using namespace lima;
@@ -249,8 +252,13 @@ void Camera::startAcq()
 	DEB_MEMBER_FUNCT();
 	DEB_TRACE() << "********** Inside of Camera::startAcq ***********";
 
+	if(!m_acq_thread->hasStarted())
+	{
+		m_acq_thread->start();
+	}
 	waitAcqEnd();
-
+	//m_stop = false;
+	DEB_TRACE() << "Stop status : " << (m_stop ? "true" : "false");
 	m_acq_frame_nb = 0;
 	StdBufferCbMgr& buffer_mgr = m_buffer_ctrl_obj.getBuffer();
 	buffer_mgr.setStartTimestamp(Timestamp::now());
@@ -293,19 +301,56 @@ void Camera::stopAcq()
 {
 	DEB_MEMBER_FUNCT();
 	DEB_TRACE() << "********** Inside of Camera::stopAcq ***********";
+	m_stop = true;
+	DEB_TRACE() << "Stop status : " << (m_stop ? "true" : "false");
+	DEB_TRACE() << "********** Inside of Camera::stopAcq *********** Before mutex";
+	//AutoMutex aLock(m_cond.mutex(),2);
+	// AutoMutex aLock(m_cond.mutex());
+	// bool islocked = aLock.locked();
+	// DEB_TRACE() << "is mutex locked:" << (islocked?"true":"false");
+	//std::mutex locker;
+	//locker.lock();
+	DEB_TRACE() << "********** Inside of Camera::stopAcq *********** StaTus xpad : " << m_state.state;
+	// int max = 100;
+	// while (!islocked && max>0)
+	// {
+	// 	islocked = aLock.tryLock();
+	// 	max--;
+	// 	usleep(100);
 
-	AutoMutex aLock(m_cond.mutex());
-	if(m_state.state != XpadStatus::Idle)
-	{
+	// }
+	//DEB_TRACE() << "********** Inside of Camera::stop : mutex lock state :" << (islocked?"true":"false") <<". It took " << 1000 - max << "Iterations";
+	
+	// if(m_state.state != XpadStatus::Idle /*&& islocked*/)
+	// {
+	
 		while( m_thread_running)
 		{
+			DEB_TRACE() << "********** Inside loop of Camera::stopAcq : abortingCurrentProcess ***********";
+			//abortCurrentProcess();
+			m_thread_running = false;
 			m_wait_flag = true;
+			m_acq_thread->join();
 			m_cond.broadcast();
-			m_cond.wait();
+			DEB_TRACE() << "********** Inside loop of Camera::stopAcq : waiting mutex ***********";
+			//m_cond.wait();
+			//aLock.unlock();
+			DEB_TRACE() << "********** Inside loop of Camera::stopAcq : unlocking mutex ***********";
+			//locker.unlock();
+			DEB_TRACE() << "********** Inside loop of Camera::stopAcq ***********";
+			//DEB_TRACE() << "is mutex locked:" << (islocked?"true":"false");
 		}
-		aLock.unlock();
-	}
-
+		
+	// }
+	
+	// if(islocked){
+	// 	aLock.unlock();
+	// 	DEB_TRACE() << "mutex was locked unlocking";
+	//}
+	//locker.unlock();
+	//m_thread_running = false;
+	//m_wait_flag = true;
+	m_stop = false;
 	DEB_TRACE() << "********** Outside of Camera::stopAcq ***********";
 }
 
@@ -388,6 +433,10 @@ void Camera::getStatus(XpadStatus& status)
 	m_state.state = status.state;
 	DEB_TRACE() << "XpadStatus.state is [" << status.state << "]";
 
+	DEB_TRACE() << "Thread running status :  [" << m_thread_running << "]";
+	DEB_TRACE() << "Quit status :  [" << m_quit << "]";
+	DEB_TRACE() << "Wait status [" << m_wait_flag << "]";
+
 	DEB_TRACE() << "********** Outside of Camera::getStatus ***********";
 
 }
@@ -401,20 +450,23 @@ int Camera::getNbHwAcquiredFrames()
 void Camera::AcqThread::threadFunction()
 {
 	DEB_MEMBER_FUNCT();
-
+	DEB_TRACE() << "threadFunction : start thread, wait for mutex...";
 	AutoMutex aLock(m_cam.m_cond.mutex());
+	DEB_TRACE() << "threadFunction : auto mutex created and locked...";
 	StdBufferCbMgr& buffer_mgr = m_cam.m_buffer_ctrl_obj.getBuffer();
 
-	while (1)
+	while (!m_cam.m_quit)
 	{
-		while (m_cam.m_wait_flag || m_cam.m_quit)
+		DEB_TRACE() << "threadFunction : Start while loop until m_quit = true...";
+		while (m_cam.m_wait_flag)
 		{
+			DEB_TRACE() << "threadFunction : Start while loop until m_wait = false...";
 			DEB_TRACE() << "Acquisition thread waiting...";
 			DEB_TRACE() << "wait flag value = " << m_cam.m_wait_flag;
 			DEB_TRACE() << "quit flag value = " << m_cam.m_quit;
 			m_cam.m_thread_running = false;
 			m_cam.m_cond.broadcast();
-			//aLock.unlock();
+			aLock.unlock();
 			m_cam.m_cond.wait();
 		}
 
@@ -428,6 +480,7 @@ void Camera::AcqThread::threadFunction()
 
 		switch (m_cam.m_process_id)
 		{
+			DEB_TRACE() << "Switch with value : " << m_cam.m_process_id ;
 			case 0:
 			{  //startAcq()
 
@@ -435,6 +488,7 @@ void Camera::AcqThread::threadFunction()
 
 				if (m_cam.m_quit == false)
 				{
+					DEB_TRACE() << "threadFunction : Case 0 : acq and m_quit = false...";
 					m_cam.sendExposeCommand();
 
 					bool continueFlag = true;
@@ -442,14 +496,17 @@ void Camera::AcqThread::threadFunction()
 
 					if (m_cam.m_image_transfer_flag == 1)
 					{
-						while (continueFlag && (!m_cam.m_nb_frames || m_cam.m_acq_frame_nb < m_cam.m_nb_frames))
+						DEB_TRACE() << "threadFunction : Case 0 : acq and m_quit = false and m_image_transfer_flag = 1";
+						while (continueFlag && (!m_cam.m_nb_frames || m_cam.m_acq_frame_nb < m_cam.m_nb_frames) && !m_cam.m_stop)
 						{
 							
+							DEB_TRACE() << "threadFunction : Start while loop until continueflag = false or Nb fram acq = nb frame";
 							// Check first if acq. has been stopped
 							if(m_cam.m_wait_flag)
 							{
 								DEB_TRACE() << "AcqThread has been stopped from user";
 								continueFlag = false;
+								m_cam.m_thread_running = false;
 								continue;
 							}
 							DEB_TRACE() << m_cam.m_acq_frame_nb;
@@ -469,24 +526,29 @@ void Camera::AcqThread::threadFunction()
 								DEB_TRACE() << "acquired " << m_cam.m_acq_frame_nb << " frames, required " << m_cam.m_nb_frames << " frames";
 							}
 							
-							else if(!m_cam.m_wait_flag)
-							{
-								aLock.lock();
-								DEB_TRACE() << "stopAcq only if this is not already done";
-								DEB_TRACE() << "stopAcq";
-								m_cam.stopAcq();
-								aLock.unlock();
-							}
 							else
 							{
 								continueFlag = false;
 								DEB_TRACE() << "ABORT detected";
 							}
 						}
+
+						DEB_TRACE() << "threadFunction : End of the acq loop, sending getDataExposeReturn";
 						m_cam.getDataExposeReturn();
+						DEB_TRACE() << "threadFunction : End of the acq loop, return from getDataExposeReturn, locking mutex";
+						//aLock.lock();
+						DEB_TRACE() << "threadFunction : End of the acq loop, set m_wait = true";
+						m_cam.m_wait_flag = true;
+						DEB_TRACE() << "threadFunction : End of the acq loop, unlocking mutex";
+						//aLock.unlock();
+						DEB_TRACE() << "threadFunction : End of the acq loop, mutex unlocked, let'see where the code is going";
+						
+						//m_cam.m_thread_running = false;
 					}
 					else
 					{
+
+						DEB_TRACE() << "threadFunction : Case 0 : acq and m_quit = false and m_image_transfer_flag != 1";
 
 						DEB_TRACE() << m_cam.m_acq_frame_nb;
 						DEB_TRACE() << m_cam.m_image_size.getWidth() << " " << m_cam.m_image_size.getHeight();
@@ -773,11 +835,13 @@ void Camera::AcqThread::threadFunction()
 				break;
 			}
 		}
-		m_cam.stopAcq();
-		aLock.lock();
-		m_cam.m_quit = false;
+		DEB_TRACE() << "Acquisition LOOP finished. Locking mutex";
+		//aLock.lock();
+		//m_cam.m_quit = false;
 		m_cam.m_wait_flag = true;
-		m_cam.m_cond.broadcast();
+		m_cam.m_thread_running = false;
+		DEB_TRACE() << "Acquisition LOOP finished. Wait_flag reset to TRUE, thread_running reset to FALSE";
+		//m_cam.m_cond.broadcast();
 	}
 
 	DEB_TRACE() << "Acquisition thread finished";
