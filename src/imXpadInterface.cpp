@@ -96,7 +96,7 @@ void Interface::stopAcq() {
    if (xpadStatus.state != Camera::XpadStatus::Idle) 
    {
        m_cam.stopAcq();
-       //m_cam.abortCurrentProcess();
+       m_cam.abortCurrentProcess();
    }   
     	
     m_cam.waitAcqEnd();
